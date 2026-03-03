@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Scheduling & Tracking System</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <div class="header-title-container">
+                <img src="Acorn Logo.png" alt="Acorn Logo" class="header-logo">
+                <h1>Client Scheduling & Tracking System</h1>
+            </div>
+            <p>Upload a .csv file to view, search, and edit its contents</p>
+        </header>
+
+        <main>
+            <div id="loading" class="hidden">Parsing file...</div>
+
+            <div id="errorContainer" class="hidden"></div>
+
+            <div class="controls-container" id="controlsContainer">
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="Search...">
+                </div>
+                <div
+                    style="display: flex; gap: 1rem; align-items: center; justify-content: center; width: 100%; margin-top: 1rem; flex-wrap: wrap;">
+                    <div class="filter-bar">
+                        <label for="monthSelect">Target Meeting Month:</label>
+                        <select id="monthSelect">
+                            <option value="">All Months</option>
+                            <option value="0">January</option>
+                            <option value="1">February</option>
+                            <option value="2">March</option>
+                            <option value="3">April</option>
+                            <option value="4">May</option>
+                            <option value="5">June</option>
+                            <option value="6">July</option>
+                            <option value="7">August</option>
+                            <option value="8">September</option>
+                            <option value="9">October</option>
+                            <option value="10">November</option>
+                            <option value="11">December</option>
+                        </select>
+                    </div>
+                    <input type="file" id="csvInput" accept=".csv" hidden>
+                    <button id="selectFileBtn" class="primary-btn" style="background-color: #2563eb;">Select
+                        File</button>
+                    <div
+                        style="width: 1px; height: 2rem; background-color: var(--border); margin: 0 0.5rem; display: none;">
+                    </div>
+                    <button id="reportsBtn" class="primary-btn" style="background-color: #7c3aed;">Reports</button>
+                    <button id="manageFieldsBtn" class="primary-btn" style="background-color: #0891b2;">Manage
+                        Fields</button>
+                    <button id="settingsBtn" class="primary-btn" style="background-color: #f59e0b;">Settings</button>
+                    <button id="addBtn" class="primary-btn">Add Customer</button>
+                    <button id="downloadBtn" class="primary-btn">Download CSV</button>
+                </div>
+            </div>
+
+            <div class="table-container hidden" id="tableContainer">
+                <!-- Table will be injected here -->
+            </div>
+        </main>
+    </div>
+
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2>Client Details</h2>
+            <div id="modalForm" class="modal-form">
+                <!-- Dynamic Inputs will be injected here -->
+            </div>
+            <div class="modal-actions">
+                <button id="deleteModalBtn" class="danger-btn hidden" style="margin-right: auto;">Delete</button>
+                <button id="cancelModalBtn" class="secondary-btn">Cancel</button>
+                <button id="saveModalBtn" class="primary-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="reportModal" class="modal-overlay hidden">
+        <div class="modal-content wide-modal">
+            <div class="modal-header">
+                <h2>Data Reports</h2>
+                <button id="closeReportBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="report-dashboard">
+                <div class="metrics-row">
+                    <div class="metric-card">
+                        <h3>Total Clients</h3>
+                        <p id="totalClientsMetric">0</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Active Clients</h3>
+                        <p id="activeClientsMetric">0</p>
+                        <span class="sub-text">(Met in last 3 months)</span>
+                    </div>
+                </div>
+                <div class="charts-row">
+                    <div class="chart-container">
+                        <h3>Client Status</h3>
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Monthly Trends</h3>
+                        <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fields Management Modal -->
+    <div id="fieldsModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Manage Fields (Columns)</h2>
+                <button id="closeFieldsBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                    Add, rename, or delete columns in your CSV.
+                </p>
+                <div id="fieldsList" class="fields-list">
+                    <!-- Field rows will be injected here -->
+                </div>
+                <div class="add-field-row" style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+                    <input type="text" id="newFieldName" placeholder="New field name..."
+                        style="flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
+                    <button id="addFieldBtn" class="primary-btn" style="margin-left: 0; white-space: nowrap;">Add
+                        Field</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="saveFieldsBtn" class="primary-btn">Save & Apply Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Remarks Modal -->
+    <div id="remarkModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Remark Details</h2>
+                <button id="closeRemarkBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="remarkContent"
+                style="padding: 1rem; background: white; border-radius: 6px; border: 1px solid var(--border); min-height: 100px; white-space: pre-wrap;">
+                <!-- Remark text will be injected here -->
+            </div>
+            <div class="modal-actions" style="margin-top: 1rem;">
+                <button id="closeRemarkActionBtn" class="secondary-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Application Settings</h2>
+                <button id="closeSettingsBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-group">
+                    <label for="primaryColorPicker">Primary Color</label>
+                    <input type="color" id="primaryColorPicker" value="#2563eb">
+                </div>
+                <div class="settings-group">
+                    <label for="bgColorPicker">Background Color</label>
+                    <input type="color" id="bgColorPicker" value="#f8fafc">
+                </div>
+                <div class="settings-group">
+                    <label for="cardBgColorPicker">Card Background Color</label>
+                    <input type="color" id="cardBgColorPicker" value="#ffffff">
+                </div>
+                <div class="settings-group">
+                    <label for="textMainColorPicker">Main Text Color</label>
+                    <input type="color" id="textMainColorPicker" value="#0f172a">
+                </div>
+                <div class="settings-group">
+                    <label for="textMutedColorPicker">Muted Text Color</label>
+                    <input type="color" id="textMutedColorPicker" value="#64748b">
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 1rem;">
+                <button id="resetSettingsBtn" class="danger-btn" style="margin-right: auto;">Reset to Defaults</button>
+                <button id="saveSettingsBtn" class="primary-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="database.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
