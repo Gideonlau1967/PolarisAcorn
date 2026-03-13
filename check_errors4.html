@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <script>
+        console.log("Supabase obj before loading database.js:", window.supabase);
+    </script>
+    <script src="database.js?v=2"></script>
+    <script>
+        console.log("DB obj before loading script.js:", window.DB);
+    </script>
+    <script src="script.js?v=2"></script>
+</body>
+</html>

@@ -17,6 +17,7 @@
     <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -58,12 +59,12 @@
                             <option value="11">December</option>
                         </select>
                     </div>
-                    <input type="file" id="csvInput" accept=".csv" hidden>
-                    <button id="selectFileBtn" class="primary-btn" style="background-color: #2563eb;">Select
-                        File</button>
                     <div
                         style="width: 1px; height: 2rem; background-color: var(--border); margin: 0 0.5rem; display: none;">
                     </div>
+                    <input type="file" id="csvInput" accept=".csv" hidden>
+                    <button id="uploadCsvBtn" class="primary-btn" style="background-color: #6366f1;">Upload CSV</button>
+                    <button id="syncBtn" class="primary-btn" style="background-color: #10b981;">Sync Supabase</button>
                     <button id="reportsBtn" class="primary-btn" style="background-color: #7c3aed;">Reports</button>
                     <button id="manageFieldsBtn" class="primary-btn" style="background-color: #0891b2;">Manage
                         Fields</button>

@@ -1,97 +1,216 @@
 /**
  * database.js
- * Handles IndexedDB operations for persisting client data locally.
+ * Supabase-backed persistence layer for the CSV Viewer.
+ *
+ * Tables required in Supabase:
+ *
+ *  1. clients
+ *     - id          bigserial PRIMARY KEY
+ *     - row_data    jsonb NOT NULL         (stores all CSV columns as key-value pairs)
+ *     - created_at  timestamptz DEFAULT now()
+ *
+ *  2. app_config
+ *     - key         text PRIMARY KEY
+ *     - value       jsonb NOT NULL
+ *
+ * Row Level Security: make sure both tables allow anon read/write, or disable RLS.
  */
 
-const DB_NAME = 'ClientSchedulingDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'clients_store';
+(function () {
+    const SUPABASE_URL = 'https://uruhtpaxqojbfwhoxvfg.supabase.co';
+    const SUPABASE_ANON = 'sb_publishable_9M_4DqOohRaxQ1VTICdFpQ_6Q3fOhXh';
 
-const DB = {
-    db: null,
-
-    /**
-     * Initialize the database.
-     */
-    init() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME);
-                }
-            };
-
-            request.onsuccess = (event) => {
-                this.db = event.target.result;
-                resolve(this.db);
-            };
-
-            request.onerror = (event) => {
-                console.error("Database error:", event.target.error);
-                reject(event.target.error);
-            };
-        });
-    },
-
-    /**
-     * Save all data, headers, and visibility settings to the database.
-     * @param {Array} data - The table data array.
-     * @param {Array} headers - The table headers array.
-     * @param {Array} visibleHeaders - The list of visible headers.
-     */
-    async saveAll(data, headers, visibleHeaders = null) {
-        if (!this.db) await this.init();
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-
-            // We store everything in a single entry for simplicity in this app's context,
-            // as it works with "one file at a time" logic anyway.
-            const request = store.put({ data, headers, visibleHeaders, timestamp: Date.now() }, 'current_dataset');
-
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject(event.target.error);
-        });
-    },
-
-    /**
-     * Retrieve the stored data and headers.
-     * @returns {Promise<Object|null>} { data, headers } or null if empty.
-     */
-    async getAll() {
-        if (!this.db) await this.init();
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readonly');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.get('current_dataset');
-
-            request.onsuccess = (event) => {
-                resolve(event.target.result || null);
-            };
-            request.onerror = (event) => reject(event.target.error);
-        });
-    },
-
-    /**
-     * Clear the database.
-     */
-    async clear() {
-        if (!this.db) await this.init();
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.clear();
-
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject(event.target.error);
-        });
+    // ── Initialize client once (avoids repeated SDK lookup) ──────────────────
+    let _client = null;
+    function getClient() {
+        if (_client) return _client;
+        if (window.supabase && window.supabase.createClient) {
+            _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+            return _client;
+        }
+        throw new Error('Supabase SDK not loaded yet. Check network / script tag.');
     }
-};
 
-window.DB = DB;
+    // ── Local-storage keys ────────────────────────────────────────────────────
+    const LS_HEADERS = 'csvViewer_headers';
+    const LS_VISIBLE_HEADERS = 'csvViewer_visibleHeaders';
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    async function fetchConfig(client, key) {
+        const { data, error } = await client
+            .from('app_config')
+            .select('value')
+            .eq('key', key)
+            .maybeSingle();
+        if (error) throw error;
+        return data ? data.value : null;
+    }
+
+    async function upsertConfig(client, key, value) {
+        const { error } = await client
+            .from('app_config')
+            .upsert({ key, value }, { onConflict: 'key' });
+        if (error) throw error;
+    }
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    /**
+     * getAll()
+     * Returns { data: [...rows with _id], headers: [...], visibleHeaders: [...] }
+     * Returns empty data if tables don't exist yet (graceful degradation).
+     */
+    async function getAll() {
+        const client = getClient();
+
+        // 1. Fetch all client rows
+        const { data: rows, error: rowErr } = await client
+            .from('clients')
+            .select('id, row_data')
+            .order('id', { ascending: true });
+
+        if (rowErr) {
+            // Log the REAL error so it shows in browser DevTools console
+            console.error('[DB] clients table error:', rowErr.message, rowErr);
+            // If the table simply doesn't exist yet, return empty gracefully
+            // instead of crashing initApp with "Failed to connect to database"
+            const isMissingTable = rowErr.code === '42P01' || rowErr.message?.includes('does not exist');
+            if (isMissingTable) {
+                console.warn('[DB] "clients" table not found. Please create it in Supabase (see database.js header for SQL).');
+            }
+            // Attempt localStorage fallback
+            const lsHeaders = localStorage.getItem(LS_HEADERS);
+            const lsVH = localStorage.getItem(LS_VISIBLE_HEADERS);
+            return {
+                data: [],
+                headers: lsHeaders ? JSON.parse(lsHeaders) : [],
+                visibleHeaders: lsVH ? JSON.parse(lsVH) : []
+            };
+        }
+
+        // 2. Map to internal format: merge id → _id, spread row_data columns
+        const tableData = (rows || []).map(r => ({
+            _id: r.id,
+            ...r.row_data
+        }));
+
+        // 3. Fetch header config (fallback to localStorage)
+        let headers = null;
+        let visibleHeaders = null;
+
+        try {
+            headers = await fetchConfig(client, 'headers');
+            visibleHeaders = await fetchConfig(client, 'visibleHeaders');
+        } catch (e) {
+            console.warn('[DB] Could not fetch config from Supabase, using localStorage:', e);
+        }
+
+        // localStorage fallback
+        if (!headers) {
+            const lsHeaders = localStorage.getItem(LS_HEADERS);
+            headers = lsHeaders ? JSON.parse(lsHeaders) : null;
+        }
+        if (!visibleHeaders) {
+            const lsVH = localStorage.getItem(LS_VISIBLE_HEADERS);
+            visibleHeaders = lsVH ? JSON.parse(lsVH) : null;
+        }
+
+        // If still no headers but we have data, infer from first row
+        if ((!headers || headers.length === 0) && tableData.length > 0) {
+            headers = Object.keys(tableData[0]).filter(k => k !== '_id');
+        }
+
+        return {
+            data: tableData,
+            headers: headers || [],
+            visibleHeaders: visibleHeaders || []
+        };
+    }
+
+    /**
+     * saveAll(tableData, headers, visibleHeaders)
+     * Full replace: upserts all rows, deletes stale ones.
+     * THROWS on failure so callers can show a visible error toast.
+     */
+    async function saveAll(tableData, headers, visibleHeaders) {
+        const client = getClient();
+
+        // 1. Always persist to localStorage immediately as a fast-read cache
+        localStorage.setItem(LS_HEADERS, JSON.stringify(headers));
+        localStorage.setItem(LS_VISIBLE_HEADERS, JSON.stringify(visibleHeaders));
+
+        // 2. Persist header metadata to Supabase app_config
+        try {
+            await Promise.all([
+                upsertConfig(client, 'headers', headers),
+                upsertConfig(client, 'visibleHeaders', visibleHeaders)
+            ]);
+        } catch (e) {
+            const msg = e?.message || String(e);
+            const hint = msg.includes('does not exist')
+                ? ' — Supabase tables not created yet!'
+                : '';
+            throw new Error('[DB] Config save failed' + hint + ': ' + msg);
+        }
+
+        // 3. Build upsert payload
+        const toUpsert = tableData.map(row => {
+            const { _id, ...rest } = row;
+            const entry = { row_data: rest };
+            if (typeof _id === 'number' && _id > 0) entry.id = _id;
+            return entry;
+        });
+
+        const existingIds = tableData
+            .map(r => r._id)
+            .filter(id => typeof id === 'number' && id > 0);
+
+        // 4. Delete rows no longer present
+        if (existingIds.length > 0) {
+            const { error: delErr } = await client
+                .from('clients')
+                .delete()
+                .not('id', 'in', `(${existingIds.join(',')})`);
+            if (delErr) console.error('[DB] Delete stale rows error:', delErr);
+        } else {
+            const { error: delErr } = await client
+                .from('clients')
+                .delete()
+                .gte('id', 0);
+            if (delErr) console.error('[DB] Clear table error:', delErr);
+        }
+
+        // 5. Separate new rows (no id) from existing rows (have id)
+        const newRows = toUpsert.filter(r => r.id === undefined);
+        const existingRows = toUpsert.filter(r => r.id !== undefined);
+
+        // Insert brand-new rows (let Supabase bigserial assign the id)
+        if (newRows.length > 0) {
+            const { error: insertErr } = await client
+                .from('clients')
+                .insert(newRows);
+            if (insertErr) {
+                const msg = insertErr.message || String(insertErr);
+                throw new Error('[DB] Insert failed: ' + msg);
+            }
+        }
+
+        // Upsert existing rows (update by id)
+        if (existingRows.length > 0) {
+            const { error: upsertErr } = await client
+                .from('clients')
+                .upsert(existingRows, { onConflict: 'id' });
+            if (upsertErr) {
+                const msg = upsertErr.message || String(upsertErr);
+                throw new Error('[DB] Update failed: ' + msg);
+            }
+        }
+
+    }
+
+    // ── Expose as window.DB ───────────────────────────────────────────────────
+    window.DB = { getAll, saveAll };
+
+})();
+

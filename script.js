@@ -7,8 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchInput');
     const monthSelect = document.getElementById('monthSelect');
     const downloadBtn = document.getElementById('downloadBtn');
-    const selectFileBtn = document.getElementById('selectFileBtn');
+
     const addBtn = document.getElementById('addBtn');
+    const syncBtn = document.getElementById('syncBtn');
+    const uploadCsvBtn = document.getElementById('uploadCsvBtn');
+
+    // Upload CSV button
+    uploadCsvBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
 
     // Modal Elements
     const editModal = document.getElementById('editModal');
@@ -54,6 +61,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toast Element
     const toast = document.getElementById('toast');
 
+    // State
+    let tableData = [];
+    let tableHeaders = [];
+    let currentSort = { column: null, direction: 'asc' }; // 'asc' or 'desc'
+    let editingRowId = null; // internal _id, null if adding new
+    let fileHandle = null; // For File System Access API
+    let statusChartInstance = null;
+    let trendsChartInstance = null;
+    let currentStatusFilter = 'all'; // 'all', 'active', 'at-risk'
+    let tempHeaders = []; // Temporary headers for field management
+    let visibleHeaders = []; // List of header names currently visible
+
     // Apply Settings on Load
     applySavedSettings();
 
@@ -62,12 +81,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function initApp() {
         try {
+            console.log("Loading data from database...");
+
+            // Wait for DB to be defined by database.js (in case of async load order)
+            while (typeof window.DB === 'undefined') {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            const DB = window.DB;
+
             const stored = await DB.getAll();
-            if (stored && stored.data && stored.headers) {
-                console.log("Loading data from database...");
+
+            if (stored && stored.data && stored.data.length > 0) {
                 tableData = stored.data;
-                tableHeaders = stored.headers;
-                // Restore visibility if it was saved, otherwise default to all
+                // If DB.getAll() returns headers, use them. Otherwise infer from first row.
+                if (stored.headers && stored.headers.length > 0) {
+                    tableHeaders = stored.headers;
+                } else {
+                    tableHeaders = Object.keys(tableData[0]).filter(k => k !== 'id' && k !== '_id');
+                }
+
                 visibleHeaders = stored.visibleHeaders || [...tableHeaders];
 
                 // Safety: Ensure Data Folder is not in visibleHeaders
@@ -83,9 +115,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Show controls and update table
                 controlsContainer.classList.remove('hidden');
                 updateTable();
+            } else {
+                console.log("No data found in Supabase.");
+                // We should still allow adding clients even if DB is empty
+                controlsContainer.classList.remove('hidden');
+                tableContainer.innerHTML = '<p style="padding: 1rem; text-align: center;">Database is empty. Click "Add Customer" to begin.</p>';
+                tableContainer.classList.remove('hidden');
             }
         } catch (err) {
             console.error("Failed to load data from DB:", err);
+            controlsContainer.classList.remove('hidden');
+            showError("Failed to connect to database.");
         }
     }
 
@@ -96,10 +136,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Select File Button
-    selectFileBtn.addEventListener('click', () => {
-        openFile();
-    });
+
+
+
 
     // Add Key Button
     addBtn.addEventListener('click', () => {
@@ -119,6 +158,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Download CSV
     downloadBtn.addEventListener('click', () => {
         downloadCSV();
+    });
+
+    // Sync Supabase
+    syncBtn.addEventListener('click', async () => {
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Syncing...';
+        showToast('Fetching latest data from Supabase...', 2000);
+        try {
+            await initApp();
+            showToast('Sync complete!', 3000);
+        } catch (err) {
+            console.error(err);
+            showToast('Sync failed. Check console.', 3000);
+        } finally {
+            syncBtn.disabled = false;
+            syncBtn.textContent = 'Sync Supabase';
+        }
     });
 
     // Modal Events
@@ -226,22 +282,12 @@ document.addEventListener('DOMContentLoaded', () => {
         resetSettings();
     });
 
-    // State
-    let tableData = [];
-    let tableHeaders = [];
-    let currentSort = { column: null, direction: 'asc' }; // 'asc' or 'desc'
-    let editingRowId = null; // internal _id, null if adding new
-    let fileHandle = null; // For File System Access API
-    let statusChartInstance = null;
-    let trendsChartInstance = null;
-    let currentStatusFilter = 'all'; // 'all', 'active', 'at-risk'
-    let tempHeaders = []; // Temporary headers for field management
-    let visibleHeaders = []; // List of header names currently visible
-
     async function openFile() {
         if ('showOpenFilePicker' in window) {
             try {
                 const [handle] = await window.showOpenFilePicker({
+                    id: 'clientCsvViewer', // Remembers the directory for future opens
+                    startIn: 'documents', // Default to documents if id is new
                     types: [{
                         description: 'CSV Files',
                         accept: { 'text/csv': ['.csv'] },
@@ -258,6 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Fallback
                     fileInput.click();
                 }
+                throw err;
             }
         } else {
             // Fallback for browsers regarding FS API
@@ -354,14 +401,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Store Data: Add _id for robust editing
-                tableData = validData.map((row, index) => ({ ...row, _id: index }));
+                // Store Data: use negative _id to mark as "new" (not from Supabase)
+                // so saveAll knows to insert without specifying id (let bigserial auto-generate)
+                tableData = validData.map((row, index) => ({ ...row, _id: -(index + 1) }));
 
                 controlsContainer.classList.remove('hidden');
                 updateTable();
 
-                // Save to Database
-                DB.saveAll(tableData, tableHeaders, visibleHeaders).catch(err => console.error("Auto-save failed:", err));
+                // Save to Database — show a visible toast if it fails
+                window.DB.saveAll(tableData, tableHeaders, visibleHeaders)
+                    .then(() => showToast('CSV imported and saved to Supabase!', 3000))
+                    .catch(err => {
+                        console.error('Auto-save failed:', err);
+                        showToast('⚠️ CSV loaded but NOT saved to Supabase: ' + err.message, 6000);
+                    });
             },
             error: (err) => {
                 loading.classList.add('hidden');
@@ -603,6 +656,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         modalForm.innerHTML = ''; // Clear previous form
 
+        // Auto-generate Client ID for new records
+        if (isAdding) {
+            const clientIdHeader = tableHeaders.find(h => {
+                const norm = h.toLowerCase().replace(/[^a-z]/g, '');
+                return norm === 'clientid' || h.toLowerCase() === 'client id' || h.toLowerCase() === 'id';
+            });
+            if (clientIdHeader) {
+                // Find max numeric ID suffix and increment
+                const maxNum = tableData.reduce((max, r) => {
+                    const val = String(r[clientIdHeader] || '').replace(/\D/g, '');
+                    const n = parseInt(val, 10);
+                    return isNaN(n) ? max : Math.max(max, n);
+                }, 0);
+                row[clientIdHeader] = 'AC-' + String(maxNum + 1).padStart(4, '0');
+            }
+        }
+
         // Define Month Headers for categorization
         const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
@@ -762,7 +832,6 @@ document.addEventListener('DOMContentLoaded', () => {
         group.className = 'form-group';
 
         const label = document.createElement('label');
-        // Truncate to 3 chars if it's a month column and long enough
         label.textContent = isMonth ? header.substring(0, 3) : header;
         group.appendChild(label);
 
@@ -771,9 +840,21 @@ document.addEventListener('DOMContentLoaded', () => {
         input.value = value || '';
         input.dataset.header = header;
 
+        // Make Client ID non-editable
+        const isClientId = header.toLowerCase().replace(/[^a-z]/g, '') === 'clientid'
+            || header.toLowerCase() === 'client id'
+            || header.toLowerCase() === 'id';
+        if (isClientId) {
+            input.readOnly = true;
+            input.style.background = 'var(--border, #e2e8f0)';
+            input.style.cursor = 'not-allowed';
+            input.style.color = 'var(--text-muted, #64748b)';
+            input.title = 'Auto-generated — cannot be edited';
+        }
+
         // Add date placeholder if header looks like a date
         if (header.toLowerCase().includes('date') || header.toLowerCase().includes('met')) {
-            input.placeholder = "YYYY MM DD";
+            input.placeholder = 'YYYY MM DD';
         }
         group.appendChild(input);
 
@@ -822,7 +903,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTable();
 
         // Save to Database
-        await DB.saveAll(tableData, tableHeaders, visibleHeaders);
+        await window.DB.saveAll(tableData, tableHeaders, visibleHeaders);
 
         // Auto-save to file
         if (fileHandle) {
@@ -838,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTable();
 
         // Save to Database
-        await DB.saveAll(tableData, tableHeaders, visibleHeaders);
+        await window.DB.saveAll(tableData, tableHeaders, visibleHeaders);
 
         if (fileHandle) {
             await saveFile();
@@ -976,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeFieldsModal();
 
         // Save to Database
-        await DB.saveAll(tableData, tableHeaders, visibleHeaders);
+        await window.DB.saveAll(tableData, tableHeaders, visibleHeaders);
 
         if (fileHandle) {
             await saveFile();
@@ -1091,19 +1172,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function showToast(message) {
+    function showToast(message, duration = 3000) {
         toast.textContent = message;
         toast.classList.remove('hidden');
         // Force reflow
         void toast.offsetWidth;
         toast.classList.add('show');
 
+        // Clear any existing timeout if we wanted to be robust, 
+        // but for now just use the basic logic with the new duration.
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => {
                 toast.classList.add('hidden');
             }, 300);
-        }, 3000);
+        }, duration);
     }
 
     function showError(message) {
