@@ -173,11 +173,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let pendingAction = null;
 
     function handleAuthentication(id, pw) {
-        // Check against dynamic list first
-        const user = adminUsers.find(u => u.id === id && u.pw === pw);
+        const idLower = id.toLowerCase();
+        const pwLower = pw.toLowerCase();
 
-        // Fallback for first-time use if list is empty or for recovery
-        const isDefault = id === 'admin' && pw === 'password123';
+        // Check against dynamic list first
+        const user = adminUsers.find(u => u.id.toLowerCase() === idLower && u.pw.toLowerCase() === pwLower);
+
+        // Fallback for first-time use
+        const isDefault = idLower === 'admin' && pwLower === 'password123';
 
         if (user || isDefault) {
             const role = isDefault ? 'admin' : (user.role || 'user');
