@@ -57,6 +57,156 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardBgColorPicker = document.getElementById('cardBgColorPicker');
     const textMainColorPicker = document.getElementById('textMainColorPicker');
     const textMutedColorPicker = document.getElementById('textMutedColorPicker');
+    const adminBtn = document.getElementById('adminBtn');
+    const adminDropdownContainer = document.querySelector('.admin-dropdown');
+    const adminDropdownContent = document.querySelector('.admin-dropdown-content');
+
+    // login Modal Elements
+    const loginModal = document.getElementById('loginModal');
+    const adminIdInput = document.getElementById('adminId');
+    const adminPasswordInput = document.getElementById('adminPassword');
+    const submitLoginBtn = document.getElementById('submitLoginBtn');
+    const cancelLoginBtn = document.getElementById('cancelLoginBtn');
+    const closeLoginBtn = document.getElementById('closeLoginBtn');
+
+    // Manage Users Modal Elements
+    const manageUsersBtn = document.getElementById('manageUsersBtn');
+    const usersModal = document.getElementById('usersModal');
+    const closeUsersBtn = document.getElementById('closeUsersBtn');
+    const usersList = document.getElementById('usersList');
+    const newUserIdInput = document.getElementById('newUserId');
+    const newUserPwInput = document.getElementById('newUserPw');
+    const addUserBtn = document.getElementById('addUserBtn');
+    const saveUsersBtn = document.getElementById('saveUsersBtn');
+
+    // Check Authentication on load
+    if (sessionStorage.getItem('adminAuthenticated') === 'true') {
+        adminDropdownContainer.classList.add('authorized');
+    }
+
+    // Admin Dropdown Toggle / Login Trigger
+    adminBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        if (!adminDropdownContainer.classList.contains('authorized')) {
+            openLoginModal();
+            return;
+        }
+
+        const IsVisible = adminDropdownContent.style.display === 'block';
+        adminDropdownContent.style.display = IsVisible ? 'none' : 'block';
+    });
+
+    // Login Logic
+    function openLoginModal() {
+        adminIdInput.value = '';
+        adminPasswordInput.value = '';
+        loginModal.classList.remove('hidden');
+        adminIdInput.focus();
+    }
+
+    function closeLoginModal() {
+        loginModal.classList.add('hidden');
+    }
+
+    submitLoginBtn.addEventListener('click', () => {
+        handleLogin();
+    });
+
+    adminPasswordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleLogin();
+    });
+
+    let pendingAction = null;
+
+    function handleLogin() {
+        const id = adminIdInput.value.trim();
+        const pw = adminPasswordInput.value;
+
+        // Check against dynamic list first
+        const user = adminUsers.find(u => u.id === id && u.pw === pw);
+
+        // Fallback for first-time use if list is empty or for recovery
+        const isDefault = id === 'admin' && pw === 'password123';
+
+        if (user || isDefault) {
+            sessionStorage.setItem('adminAuthenticated', 'true');
+            sessionStorage.setItem('adminId', id);
+            adminDropdownContainer.classList.add('authorized');
+            closeLoginModal();
+            showToast('Admin access granted', 2000);
+
+            if (pendingAction) {
+                pendingAction();
+                pendingAction = null;
+            }
+        } else {
+            showToast('Invalid credentials', 2000);
+            adminPasswordInput.value = '';
+            adminPasswordInput.focus();
+        }
+    }
+
+    function logoutAdmin() {
+        sessionStorage.removeItem('adminAuthenticated');
+        adminDropdownContainer.classList.remove('authorized');
+        adminDropdownContent.style.display = 'none';
+        showToast('Logged out of Admin Tools', 2000);
+    }
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            logoutAdmin();
+        });
+    }
+
+    cancelLoginBtn.addEventListener('click', closeLoginModal);
+    closeLoginBtn.addEventListener('click', closeLoginModal);
+
+    // Manage Users Events
+    manageUsersBtn.addEventListener('click', () => {
+        openUsersModal();
+    });
+
+    closeUsersBtn.addEventListener('click', () => {
+        closeUsersModal();
+    });
+
+    usersModal.addEventListener('click', (e) => {
+        if (e.target === usersModal) {
+            closeUsersModal();
+        }
+    });
+
+    addUserBtn.addEventListener('click', () => {
+        const id = newUserIdInput.value.trim();
+        const pw = newUserPwInput.value.trim();
+        if (id && pw) {
+            addNewUser(id, pw);
+            newUserIdInput.value = '';
+            newUserPwInput.value = '';
+        } else {
+            alert('Please enter both Login ID and Password.');
+        }
+    });
+
+    saveUsersBtn.addEventListener('click', async () => {
+        await saveUsersChanges();
+    });
+
+    // Close login modal on click outside
+    loginModal.addEventListener('click', (e) => {
+        if (e.target === loginModal) closeLoginModal();
+    });
+
+    // Close admin dropdown on click outside
+    document.addEventListener('click', () => {
+        if (adminDropdownContent) {
+            adminDropdownContent.style.display = ''; // Reverts to CSS-controlled (hover)
+        }
+    });
 
     // Toast Element
     const toast = document.getElementById('toast');
@@ -64,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // State
     let tableData = [];
     let tableHeaders = [];
+    let adminUsers = []; // Dynamic admin users
     let currentSort = { column: null, direction: 'asc' }; // 'asc' or 'desc'
     let editingRowId = null; // internal _id, null if adding new
     let fileHandle = null; // For File System Access API
@@ -90,6 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const DB = window.DB;
 
             const stored = await DB.getAll();
+            adminUsers = await DB.getAdminUsers();
 
             if (stored && stored.data && stored.data.length > 0) {
                 tableData = stored.data;
@@ -142,6 +294,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add Key Button
     addBtn.addEventListener('click', () => {
+        if (sessionStorage.getItem('adminAuthenticated') !== 'true') {
+            pendingAction = () => openEditModal(null);
+            openLoginModal();
+            return;
+        }
         openEditModal(null); // null means add mode
     });
 
@@ -505,6 +662,53 @@ document.addEventListener('DOMContentLoaded', () => {
         return data;
     }
 
+    function parseDateString(dateStr) {
+        if (!dateStr || typeof dateStr !== 'string') return null;
+        const normalizedDate = dateStr.trim().replace(/[- ]/g, '/');
+        const parts = normalizedDate.split('/');
+        if (parts.length !== 3) return null;
+
+        let day, month, year;
+        let monthStr;
+
+        if (parts[0].length === 4) {
+            year = parseInt(parts[0], 10);
+            day = parseInt(parts[2], 10);
+            monthStr = parts[1].toLowerCase();
+        } else {
+            day = parseInt(parts[0], 10);
+            year = parseInt(parts[2], 10);
+            monthStr = parts[1].toLowerCase();
+        }
+
+        const monthMap = {
+            'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+            'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11,
+            'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
+            'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
+        };
+
+        if (monthMap.hasOwnProperty(monthStr.substring(0, 3))) {
+            month = monthMap[monthStr.substring(0, 3)];
+        } else {
+            month = parseInt(monthStr, 10) - 1;
+        }
+
+        if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+        return { year, month, day };
+    }
+
+    function parseDateToValue(dateStr) {
+        if (!dateStr) return 0;
+        const parsed = parseDateString(dateStr);
+        if (!parsed) {
+            // Fallback to native Date.parse for other formats
+            const native = Date.parse(dateStr);
+            return isNaN(native) ? 0 : native;
+        }
+        return new Date(parsed.year, parsed.month, parsed.day).getTime();
+    }
+
     function sortData(column) {
         if (currentSort.column === column) {
             currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
@@ -513,9 +717,19 @@ document.addEventListener('DOMContentLoaded', () => {
             currentSort.direction = 'asc';
         }
 
+        const isDateCol = column.toLowerCase().includes('date') || column.toLowerCase().includes('met');
+
         tableData.sort((a, b) => {
             let valA = a[column];
             let valB = b[column];
+
+            if (isDateCol) {
+                const dateA = parseDateToValue(valA);
+                const dateB = parseDateToValue(valB);
+                if (dateA < dateB) return currentSort.direction === 'asc' ? -1 : 1;
+                if (dateA > dateB) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            }
 
             const numA = parseFloat(valA);
             const numB = parseFloat(valB);
@@ -642,6 +856,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Modal Functions
     function openEditModal(id) {
+        if (sessionStorage.getItem('adminAuthenticated') !== 'true') {
+            pendingAction = () => openEditModal(id);
+            openLoginModal();
+            return;
+        }
         editingRowId = id;
         const isAdding = id === null;
         const row = isAdding ? {} : tableData.find(r => r._id === id);
@@ -840,16 +1059,17 @@ document.addEventListener('DOMContentLoaded', () => {
         input.value = value || '';
         input.dataset.header = header;
 
-        // Make Client ID non-editable
-        const isClientId = header.toLowerCase().replace(/[^a-z]/g, '') === 'clientid'
-            || header.toLowerCase() === 'client id'
-            || header.toLowerCase() === 'id';
-        if (isClientId) {
+        // Make Client ID and metadata non-editable
+        const normHeader = header.toLowerCase().replace(/[^a-z]/g, '');
+        const isClientId = normHeader === 'clientid' || header.toLowerCase() === 'client id' || header.toLowerCase() === 'id';
+        const isMetadata = header === 'Update By' || header === 'last update' || header === 'Updated by' || header === 'Last update';
+
+        if (isClientId || isMetadata) {
             input.readOnly = true;
             input.style.background = 'var(--border, #e2e8f0)';
             input.style.cursor = 'not-allowed';
             input.style.color = 'var(--text-muted, #64748b)';
-            input.title = 'Auto-generated — cannot be edited';
+            input.title = isClientId ? 'Auto-generated — cannot be edited' : 'Auto-updated on save — cannot be edited';
         }
 
         // Add date placeholder if header looks like a date
@@ -881,6 +1101,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!visibleHeaders.includes(header)) {
                         visibleHeaders.push(header);
                     }
+                }
+            }
+        });
+
+        // Auto-fill metadata: "Update By" and "last update"
+        const adminId = sessionStorage.getItem('adminId') || 'admin';
+        const now = new Date();
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const dateStr = now.getFullYear() + months[now.getMonth()] + String(now.getDate()).padStart(2, '0');
+
+        newData['Update By'] = adminId;
+        newData['last update'] = dateStr;
+
+        // Ensure these headers exist in the system
+        ['Update By', 'last update'].forEach(h => {
+            if (!tableHeaders.includes(h)) {
+                tableHeaders.push(h);
+                if (!visibleHeaders.includes(h)) {
+                    visibleHeaders.push(h);
                 }
             }
         });
@@ -959,6 +1198,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('div');
             row.className = 'field-row';
 
+            // Move Buttons
+            const moveBtns = document.createElement('div');
+            moveBtns.className = 'move-btns';
+
+            const upBtn = document.createElement('button');
+            upBtn.innerHTML = '▲';
+            upBtn.className = 'move-btn';
+            upBtn.title = 'Move Up';
+            upBtn.disabled = index === 0;
+            upBtn.onclick = () => moveField(index, -1);
+
+            const downBtn = document.createElement('button');
+            downBtn.innerHTML = '▼';
+            downBtn.className = 'move-btn';
+            downBtn.title = 'Move Down';
+            downBtn.disabled = index === tempHeaders.length - 1;
+            downBtn.onclick = () => moveField(index, 1);
+
+            moveBtns.appendChild(upBtn);
+            moveBtns.appendChild(downBtn);
+
             // Visibility Toggle
             const toggle = document.createElement('input');
             toggle.type = 'checkbox';
@@ -991,11 +1251,21 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             actions.appendChild(delBtn);
+            row.appendChild(moveBtns);
             row.appendChild(toggle);
             row.appendChild(input);
             row.appendChild(actions);
             fieldsList.appendChild(row);
         });
+    }
+
+    function moveField(index, direction) {
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= tempHeaders.length) return;
+
+        const [moved] = tempHeaders.splice(index, 1);
+        tempHeaders.splice(newIndex, 0, moved);
+        renderFieldsList();
     }
 
     function addNewField(name) {
@@ -1294,38 +1564,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function isActiveClient(dateStr, targetTotalMonths) {
-        // Returns true if met within last 3 months
-        const normalizedDate = dateStr.replace(/[- ]/g, '/');
-        const parts = normalizedDate.split('/');
-        if (parts.length !== 3) return false;
+        const parsed = parseDateString(dateStr);
+        if (!parsed) return false;
 
-        let day, month, year;
-        let monthStr;
-
-        if (parts[0].length === 4) {
-            year = parseInt(parts[0], 10);
-            day = parseInt(parts[2], 10);
-            monthStr = parts[1].toLowerCase();
-        } else {
-            day = parseInt(parts[0], 10);
-            year = parseInt(parts[2], 10);
-            monthStr = parts[1].toLowerCase();
-        }
-
-        const monthMap = {
-            'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
-            'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11,
-            'january': 0, 'february': 1, 'march': 2, 'april': 3, 'june': 5,
-            'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
-        };
-
-        if (monthMap.hasOwnProperty(monthStr.substring(0, 3))) {
-            month = monthMap[monthStr.substring(0, 3)];
-        } else {
-            month = parseInt(monthStr, 10) - 1;
-        }
-
-        const lastMetTotalMonths = year * 12 + month;
+        const lastMetTotalMonths = parsed.year * 12 + parsed.month;
         const diffMonths = targetTotalMonths - lastMetTotalMonths;
 
         // Active if diff <= 3
@@ -1441,5 +1683,82 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+    }
+
+    // Manage Users Functions
+    function openUsersModal() {
+        renderUsersList();
+        usersModal.classList.remove('hidden');
+    }
+
+    function closeUsersModal() {
+        usersModal.classList.add('hidden');
+    }
+
+    function renderUsersList() {
+        usersList.innerHTML = '';
+        adminUsers.forEach((user, index) => {
+            const row = document.createElement('div');
+            row.className = 'field-row';
+            row.style.background = '#f9fafb';
+
+            const idLabel = document.createElement('div');
+            idLabel.style.flex = '1';
+            idLabel.style.fontWeight = '600';
+            idLabel.textContent = user.id;
+
+            const pwInput = document.createElement('input');
+            pwInput.type = 'password';
+            pwInput.value = user.pw;
+            pwInput.style.flex = '1';
+            pwInput.placeholder = 'Password';
+            pwInput.oninput = (e) => {
+                user.pw = e.target.value.trim();
+            };
+
+            const actions = document.createElement('div');
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '&times;';
+            delBtn.className = 'btn-icon';
+            delBtn.style.color = 'var(--error)';
+            delBtn.title = 'Delete User';
+            delBtn.onclick = () => {
+                if (adminUsers.length === 1) {
+                    alert('Cannot delete the last administrator.');
+                    return;
+                }
+                if (confirm(`Delete user "${user.id}"?`)) {
+                    adminUsers.splice(index, 1);
+                    renderUsersList();
+                }
+            };
+
+            actions.appendChild(delBtn);
+            row.appendChild(idLabel);
+            row.appendChild(pwInput);
+            row.appendChild(actions);
+            usersList.appendChild(row);
+        });
+    }
+
+    function addNewUser(id, pw) {
+        if (adminUsers.some(u => u.id === id)) {
+            alert('This Login ID already exists.');
+            return;
+        }
+        adminUsers.push({ id, pw });
+        renderUsersList();
+        showToast(`User "${id}" created locally. Click Save to persist.`);
+    }
+
+    async function saveUsersChanges() {
+        try {
+            await window.DB.saveAdminUsers(adminUsers);
+            showToast('User credentials saved successfully!');
+            closeUsersModal();
+        } catch (e) {
+            console.error(e);
+            alert('Failed to save users: ' + e.message);
+        }
     }
 });

@@ -27,7 +27,6 @@
                 <img src="Acorn Logo.png" alt="Acorn Logo" class="header-logo">
                 <h1>Client Scheduling & Tracking System</h1>
             </div>
-            <p>Upload a .csv file to view, search, and edit its contents</p>
         </header>
 
         <main>
@@ -62,15 +61,23 @@
                     <div
                         style="width: 1px; height: 2rem; background-color: var(--border); margin: 0 0.5rem; display: none;">
                     </div>
-                    <input type="file" id="csvInput" accept=".csv" hidden>
-                    <button id="uploadCsvBtn" class="primary-btn" style="background-color: #6366f1;">Upload CSV</button>
-                    <button id="syncBtn" class="primary-btn" style="background-color: #10b981;">Sync Supabase</button>
-                    <button id="reportsBtn" class="primary-btn" style="background-color: #7c3aed;">Reports</button>
-                    <button id="manageFieldsBtn" class="primary-btn" style="background-color: #0891b2;">Manage
-                        Fields</button>
-                    <button id="settingsBtn" class="primary-btn" style="background-color: #f59e0b;">Settings</button>
+                    <div class="admin-dropdown">
+                        <button id="adminBtn" class="primary-btn" style="background-color: #64748b;">Admin Tools
+                            ▾</button>
+                        <div class="admin-dropdown-content">
+                            <input type="file" id="csvInput" accept=".csv" hidden>
+                            <button id="uploadCsvBtn" class="dropdown-item">Upload CSV</button>
+                            <button id="syncBtn" class="dropdown-item">Sync Supabase</button>
+                            <button id="reportsBtn" class="dropdown-item">Reports</button>
+                            <button id="manageFieldsBtn" class="dropdown-item">Manage Fields</button>
+                            <button id="manageUsersBtn" class="dropdown-item">Manage Users</button>
+                            <button id="settingsBtn" class="dropdown-item">Settings</button>
+                            <button id="downloadBtn" class="dropdown-item">Download CSV</button>
+                            <button id="logoutBtn" class="dropdown-item"
+                                style="color: var(--error); border-top: 1px solid var(--border);">Logout</button>
+                        </div>
+                    </div>
                     <button id="addBtn" class="primary-btn">Add Customer</button>
-                    <button id="downloadBtn" class="primary-btn">Download CSV</button>
                 </div>
             </div>
 
@@ -170,6 +177,63 @@
             </div>
             <div class="modal-actions" style="margin-top: 1rem;">
                 <button id="closeRemarkActionBtn" class="secondary-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Users Modal -->
+    <div id="usersModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Manage Login Credentials</h2>
+                <button id="closeUsersBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                    Create or delete administrator login IDs and passwords.
+                </p>
+                <div id="usersList" class="fields-list">
+                    <!-- User rows will be injected here -->
+                </div>
+                <div class="add-user-row"
+                    style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; background: #fff; padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                    <h4 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-main);">Create New Login:
+                    </h4>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="newUserId" placeholder="Login ID..."
+                            style="flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
+                        <input type="text" id="newUserPw" placeholder="Password..."
+                            style="flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
+                        <button id="addUserBtn" class="primary-btn" style="white-space: nowrap;">Create User</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="saveUsersBtn" class="primary-btn">Save All User Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="loginModal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Admin login</h2>
+                <button id="closeLoginBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="adminId">Login ID</label>
+                    <input type="text" id="adminId" placeholder="Enter ID...">
+                </div>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="adminPassword">Password</label>
+                    <input type="password" id="adminPassword" placeholder="Enter password...">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancelLoginBtn" class="secondary-btn">Cancel</button>
+                <button id="submitLoginBtn" class="primary-btn">Login</button>
             </div>
         </div>
     </div>

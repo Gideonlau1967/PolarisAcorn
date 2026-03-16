@@ -43,7 +43,7 @@ header {
 }
 
 .header-logo {
-    max-height: 7rem;
+    max-height: 8.75rem;
     object-fit: contain;
 }
 
@@ -263,6 +263,65 @@ tbody tr {
 
 .danger-btn:hover {
     background-color: #fee2e2;
+}
+
+/* Admin Dropdown */
+.admin-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.admin-dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: white;
+    min-width: 200px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    z-index: 100;
+    overflow: hidden;
+    margin-top: 0.5rem;
+    animation: slideDown 0.2s ease-out;
+}
+
+.admin-dropdown.authorized:hover .admin-dropdown-content {
+    display: block;
+}
+
+.dropdown-item {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text-main);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.dropdown-item:hover {
+    background-color: #f1f5f9;
+    color: var(--primary);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Modal Styles */
@@ -596,6 +655,34 @@ td.actions-cell {
 
 .btn-remark:hover {
     background-color: #fef08a;
+}
+
+.move-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.move-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px;
+    line-height: 1;
+    border-radius: 2px;
+    color: var(--text-muted);
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.move-btn:hover {
+    background-color: #f3f4f6;
+    color: var(--primary);
+}
+
+.move-btn:disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
 }
 
 /* Table Inputs */

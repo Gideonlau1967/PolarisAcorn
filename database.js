@@ -209,8 +209,28 @@
 
     }
 
+    async function getAdminUsers() {
+        const client = getClient();
+        try {
+            const users = await fetchConfig(client, 'admin_users');
+            return users || [{ id: 'admin', pw: 'password123' }]; // Default if none
+        } catch (e) {
+            console.error('[DB] Error fetching admin users:', e);
+            return [{ id: 'admin', pw: 'password123' }];
+        }
+    }
+
+    async function saveAdminUsers(users) {
+        const client = getClient();
+        try {
+            await upsertConfig(client, 'admin_users', users);
+        } catch (e) {
+            console.error('[DB] Error saving admin users:', e);
+            throw e;
+        }
+    }
+
     // ── Expose as window.DB ───────────────────────────────────────────────────
-    window.DB = { getAll, saveAll };
+    window.DB = { getAll, saveAll, getAdminUsers, saveAdminUsers };
 
 })();
-
