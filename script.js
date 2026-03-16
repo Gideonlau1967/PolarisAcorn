@@ -224,6 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let tempHeaders = []; // Temporary headers for field management
     let visibleHeaders = []; // List of header names currently visible
 
+    const DEFAULT_DRIVE_LINK = 'https://drive.google.com/drive/u/1/folders/1M_3_3ok51Hp9PyPr2rqfNVWRj7l9VnRp';
+
     // Apply Settings on Load
     applySavedSettings();
 
@@ -901,10 +903,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3. Data Button Logic
         const locationHeader = tableHeaders.find(h =>
-            h.toLowerCase().includes('data folder') ||
+            h.toLowerCase() === 'client data location' ||
             h.toLowerCase().includes('data location') ||
+            h.toLowerCase().includes('data folder') ||
             h.toLowerCase() === 'folder'
-        ) || 'Data Folder';
+        ) || 'Client Data Location';
         const locationValue = row[locationHeader] || '';
         const nameHeader = tableHeaders.find(h => h.toLowerCase().includes('client name'))
             || tableHeaders.find(h => h.toLowerCase().includes('name'))
@@ -948,57 +951,80 @@ document.addEventListener('DOMContentLoaded', () => {
         let autoBtnContainer = null;
         if (clientName || locationValue) {
             autoBtnContainer = document.createElement('div');
-            autoBtnContainer.className = 'auto-data-container';
+            autoBtnContainer.className = 'admin-tools-wrapper';
+            autoBtnContainer.style.marginTop = '1.5rem';
             autoBtnContainer.style.display = 'flex';
             autoBtnContainer.style.flexDirection = 'column';
-            autoBtnContainer.style.gap = '0.5rem';
+            autoBtnContainer.style.gap = '0.75rem';
 
-            const btnWrapper = document.createElement('div');
-            btnWrapper.style.display = 'flex';
-            btnWrapper.style.gap = '0.5rem';
+            // 1. Primary Action: Open Client Data Folder (always visible)
+            const openFolderBtn = document.createElement('button');
+            openFolderBtn.type = 'button';
+            openFolderBtn.className = 'primary-btn';
+            openFolderBtn.style.width = '100%';
+            openFolderBtn.style.padding = '1rem';
+            openFolderBtn.innerHTML = '📂 Open Client Data Folder';
 
-            const autoBtn = document.createElement('button');
-            autoBtn.type = 'button';
-            autoBtn.className = 'auto-data-btn';
-            autoBtn.style.flex = '1';
-            autoBtn.innerHTML = '<span class="icon">📁</span> Open Client Data Folder';
-            autoBtn.onclick = () => {
-                const manualPath = (row[locationHeader] || '').trim();
-                if (manualPath) {
-                    if (manualPath.startsWith('http') || manualPath.startsWith('www')) {
-                        window.open(manualPath.startsWith('http') ? manualPath : 'https://' + manualPath, '_blank');
-                    } else {
-                        window.open(manualPath, '_blank');
-                    }
-                } else if (clientName) {
-                    const initial = clientName.charAt(0).toUpperCase();
-                    const folderPath = `Client Data/${initial}/${clientName}`;
-                    window.open(folderPath, '_blank');
+            // 2. Admin Tools Toggle
+            const adminToggleBtn = document.createElement('button');
+            adminToggleBtn.type = 'button';
+            adminToggleBtn.className = 'secondary-btn';
+            adminToggleBtn.style.width = '100%';
+            adminToggleBtn.style.display = 'flex';
+            adminToggleBtn.style.justifyContent = 'space-between';
+            adminToggleBtn.style.alignItems = 'center';
+            adminToggleBtn.style.fontSize = '0.9rem';
+            adminToggleBtn.innerHTML = '<span>🛠️ Admin Tools (Data Location)</span> <span class="arrow">▾</span>';
+
+            const adminContent = document.createElement('div');
+            adminContent.className = 'admin-tools-content hidden';
+            adminContent.style.flexDirection = 'column';
+            adminContent.style.gap = '1rem';
+            adminContent.style.marginTop = '0.5rem';
+            adminContent.style.padding = '1rem';
+            adminContent.style.background = '#fff';
+            adminContent.style.borderRadius = '8px';
+            adminContent.style.border = '1px solid var(--border)';
+
+            adminToggleBtn.onclick = () => {
+                const isHidden = adminContent.classList.toggle('hidden');
+                adminToggleBtn.querySelector('.arrow').textContent = isHidden ? '▾' : '▴';
+                adminContent.style.display = isHidden ? 'none' : 'flex';
+            };
+
+            // Admin Item 1: Select Client Data (Root Directory)
+            const masterFolderBtn = document.createElement('button');
+            masterFolderBtn.type = 'button';
+            masterFolderBtn.className = 'secondary-btn';
+            masterFolderBtn.style.width = '100%';
+            masterFolderBtn.innerHTML = '📁 1. Select Client Data (Root)';
+            masterFolderBtn.onclick = () => window.open(DEFAULT_DRIVE_LINK, '_blank');
+            adminContent.appendChild(masterFolderBtn);
+
+            // Admin Item 2: Save Location entry
+            const locationInpGroup = createInputGroup('Client Data Folder', locationValue || '');
+            locationInpGroup.querySelector('label').textContent = '2. Save Location:';
+            const locationInput = locationInpGroup.querySelector('input');
+            locationInput.placeholder = 'Paste folder link here...';
+            locationInput.dataset.header = locationHeader; 
+            adminContent.appendChild(locationInpGroup);
+
+            // Wiring Open Action to the Input
+            openFolderBtn.onclick = () => {
+                const url = locationInput.value.trim();
+                if (url) {
+                    window.open(url.startsWith('http') ? url : 'https://' + url, '_blank');
                 } else {
-                    alert('No location or client name available.');
+                    alert('Data location not found. Please use Admin Tools to set the Save Location.');
+                    // Expand admin tools if empty
+                    adminContent.classList.remove('hidden');
+                    adminContent.style.display = 'flex';
                 }
             };
 
-            const editPathBtn = document.createElement('button');
-            editPathBtn.type = 'button';
-            editPathBtn.className = 'secondary-btn';
-            editPathBtn.style.padding = '0.5rem';
-            editPathBtn.innerHTML = '⚙️';
-            editPathBtn.title = 'Set Data Location';
-
-            const pathInputGroup = createInputGroup(locationHeader, locationValue);
-            pathInputGroup.classList.add('hidden');
-            pathInputGroup.style.marginTop = '0.5rem';
-            pathInputGroup.querySelector('label').textContent = 'Specify Data Location Path:';
-
-            editPathBtn.onclick = () => {
-                pathInputGroup.classList.toggle('hidden');
-            };
-
-            btnWrapper.appendChild(autoBtn);
-            btnWrapper.appendChild(editPathBtn);
-            autoBtnContainer.appendChild(btnWrapper);
-            autoBtnContainer.appendChild(pathInputGroup);
+            autoBtnContainer.appendChild(openFolderBtn);
+            autoBtnContainer.appendChild(adminToggleBtn);
+            autoBtnContainer.appendChild(adminContent);
         }
 
         // 4. Final Assembly
