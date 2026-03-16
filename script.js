@@ -14,6 +14,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Upload CSV button
     uploadCsvBtn.addEventListener('click', () => {
+        if (sessionStorage.getItem('userRole') !== 'admin') {
+            showToast('Access restricted to administrators', 2000);
+            return;
+        }
         fileInput.click();
     });
 
@@ -58,8 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const textMainColorPicker = document.getElementById('textMainColorPicker');
     const textMutedColorPicker = document.getElementById('textMutedColorPicker');
     const adminBtn = document.getElementById('adminBtn');
+    const loginScreen = document.getElementById('loginScreen');
+    const appContainer = document.getElementById('appContainer');
     const adminDropdownContainer = document.querySelector('.admin-dropdown');
     const adminDropdownContent = document.querySelector('.admin-dropdown-content');
+
+    // Hide Admin Button by default
+    adminDropdownContainer.classList.add('hidden');
 
     // login Modal Elements
     const loginModal = document.getElementById('loginModal');
@@ -69,6 +78,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelLoginBtn = document.getElementById('cancelLoginBtn');
     const closeLoginBtn = document.getElementById('closeLoginBtn');
 
+    // Main Page login Elements
+    const mainAdminId = document.getElementById('mainAdminId');
+    const mainAdminPassword = document.getElementById('mainAdminPassword');
+    const mainSubmitLoginBtn = document.getElementById('mainSubmitLoginBtn');
+
     // Manage Users Modal Elements
     const manageUsersBtn = document.getElementById('manageUsersBtn');
     const usersModal = document.getElementById('usersModal');
@@ -76,12 +90,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const usersList = document.getElementById('usersList');
     const newUserIdInput = document.getElementById('newUserId');
     const newUserPwInput = document.getElementById('newUserPw');
+    const newUserRoleInput = document.getElementById('newUserRole');
     const addUserBtn = document.getElementById('addUserBtn');
     const saveUsersBtn = document.getElementById('saveUsersBtn');
 
     // Check Authentication on load
     if (sessionStorage.getItem('adminAuthenticated') === 'true') {
+        const role = sessionStorage.getItem('userRole') || 'admin';
+        if (role === 'admin') {
+            adminDropdownContainer.classList.remove('hidden');
+        } else {
+            adminDropdownContainer.classList.add('hidden');
+        }
         adminDropdownContainer.classList.add('authorized');
+        loginScreen.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+    } else {
+        loginScreen.classList.remove('hidden');
+        appContainer.classList.add('hidden');
     }
 
     // Admin Dropdown Toggle / Login Trigger
@@ -97,6 +123,23 @@ document.addEventListener('DOMContentLoaded', () => {
         adminDropdownContent.style.display = IsVisible ? 'none' : 'block';
     });
 
+    // Event Listeners for Login
+    mainSubmitLoginBtn.addEventListener('click', () => {
+        handleAuthentication(mainAdminId.value.trim(), mainAdminPassword.value);
+    });
+
+    mainAdminPassword.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleAuthentication(mainAdminId.value.trim(), mainAdminPassword.value);
+    });
+
+    submitLoginBtn.addEventListener('click', () => {
+        handleAuthentication(adminIdInput.value.trim(), adminPasswordInput.value);
+    });
+
+    adminPasswordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleAuthentication(adminIdInput.value.trim(), adminPasswordInput.value);
+    });
+
     // Login Logic
     function openLoginModal() {
         adminIdInput.value = '';
@@ -109,20 +152,27 @@ document.addEventListener('DOMContentLoaded', () => {
         loginModal.classList.add('hidden');
     }
 
-    submitLoginBtn.addEventListener('click', () => {
-        handleLogin();
-    });
+    function logoutAdmin() {
+        sessionStorage.removeItem('adminAuthenticated');
+        sessionStorage.removeItem('userRole');
+        adminDropdownContainer.classList.add('hidden');
+        adminDropdownContainer.classList.remove('authorized');
+        adminDropdownContent.style.display = 'none';
+        
+        // Reset login fields
+        mainAdminId.value = '';
+        mainAdminPassword.value = '';
+        adminIdInput.value = '';
+        adminPasswordInput.value = '';
 
-    adminPasswordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleLogin();
-    });
+        loginScreen.classList.remove('hidden');
+        appContainer.classList.add('hidden');
+        showToast('Logged out', 2000);
+    }
 
     let pendingAction = null;
 
-    function handleLogin() {
-        const id = adminIdInput.value.trim();
-        const pw = adminPasswordInput.value;
-
+    function handleAuthentication(id, pw) {
         // Check against dynamic list first
         const user = adminUsers.find(u => u.id === id && u.pw === pw);
 
@@ -130,11 +180,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const isDefault = id === 'admin' && pw === 'password123';
 
         if (user || isDefault) {
+            const role = isDefault ? 'admin' : (user.role || 'user');
             sessionStorage.setItem('adminAuthenticated', 'true');
             sessionStorage.setItem('adminId', id);
+            sessionStorage.setItem('userRole', role);
+            
+            if (role === 'admin') {
+                adminDropdownContainer.classList.remove('hidden');
+            } else {
+                adminDropdownContainer.classList.add('hidden');
+            }
             adminDropdownContainer.classList.add('authorized');
+            
+            loginScreen.classList.add('hidden');
+            appContainer.classList.remove('hidden');
             closeLoginModal();
-            showToast('Admin access granted', 2000);
+            showToast(`Access granted (${role})`, 2000);
 
             if (pendingAction) {
                 pendingAction();
@@ -143,21 +204,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             showToast('Invalid credentials', 2000);
             adminPasswordInput.value = '';
-            adminPasswordInput.focus();
+            mainAdminPassword.value = '';
         }
     }
 
-    function logoutAdmin() {
-        sessionStorage.removeItem('adminAuthenticated');
-        adminDropdownContainer.classList.remove('authorized');
-        adminDropdownContent.style.display = 'none';
-        showToast('Logged out of Admin Tools', 2000);
-    }
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
+    const mainLogoutBtn = document.getElementById('mainLogoutBtn');
+    if (mainLogoutBtn) {
+        mainLogoutBtn.addEventListener('click', () => {
             logoutAdmin();
         });
     }
@@ -183,8 +236,9 @@ document.addEventListener('DOMContentLoaded', () => {
     addUserBtn.addEventListener('click', () => {
         const id = newUserIdInput.value.trim();
         const pw = newUserPwInput.value.trim();
+        const role = newUserRoleInput.value;
         if (id && pw) {
-            addNewUser(id, pw);
+            addNewUser(id, pw, role);
             newUserIdInput.value = '';
             newUserPwInput.value = '';
         } else {
@@ -321,6 +375,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sync Supabase
     syncBtn.addEventListener('click', async () => {
+        if (sessionStorage.getItem('userRole') !== 'admin') {
+            showToast('Access restricted to administrators', 2000);
+            return;
+        }
         syncBtn.disabled = true;
         syncBtn.textContent = 'Syncing...';
         showToast('Fetching latest data from Supabase...', 2000);
@@ -976,6 +1034,11 @@ document.addEventListener('DOMContentLoaded', () => {
             adminToggleBtn.style.fontSize = '0.9rem';
             adminToggleBtn.innerHTML = '<span>🛠️ Admin Tools (Data Location)</span> <span class="arrow">▾</span>';
 
+            // Show admin tools only if role is admin
+            if (sessionStorage.getItem('userRole') !== 'admin') {
+                adminToggleBtn.classList.add('hidden');
+            }
+
             const adminContent = document.createElement('div');
             adminContent.className = 'admin-tools-content hidden';
             adminContent.style.flexDirection = 'column';
@@ -1015,10 +1078,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (url) {
                     window.open(url.startsWith('http') ? url : 'https://' + url, '_blank');
                 } else {
-                    alert('Data location not found. Please use Admin Tools to set the Save Location.');
-                    // Expand admin tools if empty
-                    adminContent.classList.remove('hidden');
-                    adminContent.style.display = 'flex';
+                    const isAdmin = sessionStorage.getItem('userRole') === 'admin';
+                    if (isAdmin) {
+                        alert('Data location not found. Please use Admin Tools to set the Save Location.');
+                        adminContent.classList.remove('hidden');
+                        adminContent.style.display = 'flex';
+                    } else {
+                        alert('Data location not found. This client does not have a data folder link set yet.');
+                    }
                 }
             };
 
@@ -1194,6 +1261,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Field Management Functions
     function openFieldsModal() {
+        if (sessionStorage.getItem('userRole') !== 'admin') {
+            showToast('Access restricted to administrators', 2000);
+            return;
+        }
         // Determine Data Folder header to hide it from management
         const locationHeader = tableHeaders.find(h =>
             h.toLowerCase().includes('data folder') ||
@@ -1374,6 +1445,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Settings Functions
     function openSettingsModal() {
+        if (sessionStorage.getItem('userRole') !== 'admin') {
+            showToast('Access restricted to administrators', 2000);
+            return;
+        }
         // Load current values into pickers
         primaryColorPicker.value = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#2563eb';
         bgColorPicker.value = getComputedStyle(document.documentElement).getPropertyValue('--bg-color').trim() || '#f8fafc';
@@ -1524,6 +1599,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Report Functions
     function openReportModal() {
+        if (sessionStorage.getItem('userRole') !== 'admin') {
+            showToast('Access restricted to administrators', 2000);
+            return;
+        }
         if (tableData.length === 0) {
             showToast("No data available to report on.");
             return;
@@ -1713,6 +1792,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Manage Users Functions
     function openUsersModal() {
+        if (sessionStorage.getItem('userRole') !== 'admin') {
+            showToast('Access restricted to administrators', 2000);
+            return;
+        }
         renderUsersList();
         usersModal.classList.remove('hidden');
     }
@@ -1742,6 +1825,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 user.pw = e.target.value.trim();
             };
 
+            const roleSelect = document.createElement('select');
+            roleSelect.innerHTML = `
+                <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+            `;
+            roleSelect.style.padding = '0.5rem';
+            roleSelect.style.border = '1px solid var(--border)';
+            roleSelect.style.borderRadius = '4px';
+            roleSelect.onchange = (e) => {
+                user.role = e.target.value;
+            };
+
             const actions = document.createElement('div');
             const delBtn = document.createElement('button');
             delBtn.innerHTML = '&times;';
@@ -1762,19 +1857,20 @@ document.addEventListener('DOMContentLoaded', () => {
             actions.appendChild(delBtn);
             row.appendChild(idLabel);
             row.appendChild(pwInput);
+            row.appendChild(roleSelect);
             row.appendChild(actions);
             usersList.appendChild(row);
         });
     }
 
-    function addNewUser(id, pw) {
+    function addNewUser(id, pw, role) {
         if (adminUsers.some(u => u.id === id)) {
             alert('This Login ID already exists.');
             return;
         }
-        adminUsers.push({ id, pw });
+        adminUsers.push({ id, pw, role });
         renderUsersList();
-        showToast(`User "${id}" created locally. Click Save to persist.`);
+        showToast(`User "${id}" (${role}) created locally. Click Save to persist.`);
     }
 
     async function saveUsersChanges() {

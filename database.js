@@ -213,10 +213,10 @@
         const client = getClient();
         try {
             const users = await fetchConfig(client, 'admin_users');
-            return users || [{ id: 'admin', pw: 'password123' }]; // Default if none
+            return users || [{ id: 'admin', pw: 'password123', role: 'admin' }]; // Default if none
         } catch (e) {
             console.error('[DB] Error fetching admin users:', e);
-            return [{ id: 'admin', pw: 'password123' }];
+            return [{ id: 'admin', pw: 'password123', role: 'admin' }];
         }
     }
 

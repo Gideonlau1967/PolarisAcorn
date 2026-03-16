@@ -21,7 +21,26 @@
 </head>
 
 <body>
-    <div class="app-container">
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <img src="Acorn Logo.png" alt="Acorn Logo" class="login-logo">
+            <h2>Welcome Back</h2>
+            <p>Please log in to your account</p>
+            <div class="modal-form">
+                <div class="form-group">
+                    <label for="mainAdminId">Login ID</label>
+                    <input type="text" id="mainAdminId" placeholder="Enter ID...">
+                </div>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="mainAdminPassword">Password</label>
+                    <input type="password" id="mainAdminPassword" placeholder="Enter password...">
+                </div>
+            </div>
+            <button id="mainSubmitLoginBtn" class="primary-btn" style="width: 100%; margin-top: 2rem; padding: 1rem;">Log In</button>
+        </div>
+    </div>
+
+    <div class="app-container hidden" id="appContainer">
         <header>
             <div class="header-title-container">
                 <img src="Acorn Logo.png" alt="Acorn Logo" class="header-logo">
@@ -61,7 +80,7 @@
                     <div
                         style="width: 1px; height: 2rem; background-color: var(--border); margin: 0 0.5rem; display: none;">
                     </div>
-                    <div class="admin-dropdown">
+                    <div class="admin-dropdown hidden">
                         <button id="adminBtn" class="primary-btn" style="background-color: #64748b;">Admin Tools
                             ▾</button>
                         <div class="admin-dropdown-content">
@@ -73,11 +92,10 @@
                             <button id="manageUsersBtn" class="dropdown-item">Manage Users</button>
                             <button id="settingsBtn" class="dropdown-item">Settings</button>
                             <button id="downloadBtn" class="dropdown-item">Download CSV</button>
-                            <button id="logoutBtn" class="dropdown-item"
-                                style="color: var(--error); border-top: 1px solid var(--border);">Logout</button>
                         </div>
                     </div>
                     <button id="addBtn" class="primary-btn">Add Customer</button>
+                    <button id="mainLogoutBtn" class="secondary-btn">Logout</button>
                 </div>
             </div>
 
@@ -204,6 +222,10 @@
                             style="flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
                         <input type="text" id="newUserPw" placeholder="Password..."
                             style="flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
+                        <select id="newUserRole" style="padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
                         <button id="addUserBtn" class="primary-btn" style="white-space: nowrap;">Create User</button>
                     </div>
                 </div>

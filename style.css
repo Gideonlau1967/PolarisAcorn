@@ -20,12 +20,50 @@ body {
     background-color: var(--bg-color);
     color: var(--text-main);
     line-height: 1.5;
+    padding: 0;
+    margin: 0;
+    min-height: 100vh;
+}
+
+.login-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
     padding: 2rem;
+}
+
+.login-card {
+    background: var(--card-bg);
+    padding: 2.5rem;
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.login-logo {
+    max-height: 180px;
+    margin-bottom: 1rem;
+}
+
+.login-card h2 {
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.login-card p {
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
 }
 
 .app-container {
     max-width: 1200px;
     margin: 0 auto;
+    padding: 2rem;
 }
 
 header {
